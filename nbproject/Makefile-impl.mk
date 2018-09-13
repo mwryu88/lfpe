@@ -24,7 +24,7 @@ CLEAN_SUBPROJECTS=${CLEAN_SUBPROJECTS_${SUBPROJECTS}}
 
 
 # Project Name
-PROJECTNAME=Line_Depth_Fusion
+PROJECTNAME=lfpe
 
 # Active Configuration
 DEFAULTCONF=Debug

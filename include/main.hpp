@@ -20,7 +20,7 @@
 #include <vector>
 
 #include <librealsense2/rs.hpp> // Include RealSense Cross Platform API
-#include "example.hpp"          // Include short list of convenience functions for rendering
+//#include "example.hpp"          // Include short list of convenience functions for rendering
 
 #include "icpPointToPlane.h"
 //#include "icpPointToPoint.h"
@@ -44,7 +44,7 @@ using namespace viz;
 
 #define PI 3.1415926
 #define RAD2DEG 57.295791433
-//#define VIEW_POINTCLOUD
+#define VIEW_POINTCLOUD
 //#define USE_DINAMIXEL
 #define VIEW_FLOORMAP
 #define FLOORMAP_W 640    
@@ -53,6 +53,7 @@ using namespace viz;
 #define IMAGE_H    720
 
 #define BUF_MAX 512
+#define MAX_ITER 20
 
 typedef struct
 {
@@ -98,6 +99,14 @@ typedef struct
 
 camera_param_t m_cam_param;
 
+typedef struct
+{
+    vector<point3f> point;
+    plane_t plane;
+    double dist;
+    int num;
+}ransac_t;
+
 void initializeRS2(void);
 void initializeCamParams(void);
 float point2planeICP(vector<point2d> curr_line_points, vector<point2d> prev_line_points);
@@ -110,13 +119,13 @@ void *thread_dynamixel(void *);
 unsigned int servo(unsigned char ID,unsigned int Position,unsigned int Speed);
 
 float det(mat3x3_t matrix);
-float distPoint2Plane(point3f point, plane_t plane);
+double distPoint2Plane(point3f point, plane_t plane);
 plane_t computePlane(point3f p1,point3f p2,point3f p3);
-
+vector<point3f> computeRANSAC(vector<point3f> floorpoints);
     // Create a simple OpenGL window for rendering:
     //window app(1280, 720, "RealSense Capture Example");
     // Declare two textures on the GPU, one for color and one for depth
-texture depth_image, color_image, ir_image;
+//texture depth_image, color_image, ir_image;
     // Declare depth colorizer for pretty visualization of depth data
 rs2::colorizer color_map;
 

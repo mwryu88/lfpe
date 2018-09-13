@@ -30,8 +30,7 @@ build/Debug/GNU-Linux/main.o: main.cpp include/main.hpp \
  include/librealsense2/hpp/rs_processing.hpp \
  include/librealsense2/hpp/rs_record_playback.hpp \
  include/librealsense2/hpp/rs_sensor.hpp \
- include/librealsense2/hpp/rs_pipeline.hpp include/example.hpp \
- include/../third-party/stb_easy_font.h include/icpPointToPlane.h \
+ include/librealsense2/hpp/rs_pipeline.hpp include/icpPointToPlane.h \
  include/icp.h include/matrix.h include/kdtree.h include/dynamixel.hpp
 
 include/main.hpp:
@@ -109,10 +108,6 @@ include/librealsense2/hpp/rs_record_playback.hpp:
 include/librealsense2/hpp/rs_sensor.hpp:
 
 include/librealsense2/hpp/rs_pipeline.hpp:
-
-include/example.hpp:
-
-include/../third-party/stb_easy_font.h:
 
 include/icpPointToPlane.h:
 

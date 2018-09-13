@@ -2,13 +2,13 @@
 
 ofstream outFile("angle.txt",ios::out);
 
-int main(int argc, char * argv[])
-{
-    
 #ifdef VIEW_POINTCLOUD
     Viz3d myWindow("Viz Demo");
+    Viz3d myWindow2("Viz Demo2");
 #endif
-    
+
+int main(int argc, char * argv[])
+{
     rs2::log_to_console(RS2_LOG_SEVERITY_ERROR);
     
     initialze();
@@ -24,7 +24,7 @@ int main(int argc, char * argv[])
         
         auto vertices = points.get_vertices();
         
-        Mat mat_point_cloud = Mat::zeros(1, points.size(), CV_32FC3);
+        
         
         vector<point3f> m_PointCloud;
         
@@ -37,6 +37,9 @@ int main(int argc, char * argv[])
         Mat image_ir_origin(Size(w, h), CV_8UC1, (void*)ir.get_data(), Mat::AUTO_STEP);
         Mat image_ir = Mat::zeros(Size(w, h), CV_8UC1);
         Mat mat_floor = Mat::zeros(Size(w, h), CV_8UC1);
+        
+        vector<point3f> temp_floor_points;
+        vector<point3f> floor_points;
         
             
         for(int cnt=0;cnt<points.size();cnt++)
@@ -62,18 +65,17 @@ int main(int argc, char * argv[])
                 {
                     mat_floor.at<uchar>(temp_pixel_point.y,temp_pixel_point.x) = image_ir_origin.at<uchar>(temp_pixel_point.y,temp_pixel_point.x);
                     m_lineDepth[temp_pixel_point.x][temp_pixel_point.y] = m_tempDepthPointCloud;
+                    temp_floor_points.push_back(m_tempPointCloud);
                 }
                              
                 m_PointCloud.push_back(m_tempPointCloud);
                 
-#ifdef VIEW_POINTCLOUD              
-                mat_point_cloud.at<Vec3f>(0,cnt)[0] = m_tempPointCloud.x;
-                mat_point_cloud.at<Vec3f>(0,cnt)[1] = m_tempPointCloud.y;
-                mat_point_cloud.at<Vec3f>(0,cnt)[2] = m_tempPointCloud.z;
-#endif                
+               
             }                               
         }
         
+        floor_points = computeRANSAC(temp_floor_points);
+
         //cv::imshow("floor_image",mat_floor);
         
         Mat mat_floorMap = Mat::zeros(FLOORMAP_H,FLOORMAP_W,CV_8UC1);//1채널 uchar
@@ -177,12 +179,7 @@ int main(int argc, char * argv[])
         //cv::imshow("FloorMap",mat_colorFloorMap);
 #endif
         
-#ifdef VIEW_POINTCLOUD        
-        WCloud cloud_widget = WCloud(mat_point_cloud, Color::green());
-        cloud_widget.setRenderingProperty(POINT_SIZE, 1 );
-        myWindow.showWidget("Depth", cloud_widget);
-        myWindow.spinOnce( 1, true );               
-#endif
+
         Mat win_mat(Size(1280, 720), CV_8UC1);
         Mat win_mat_1(Size(1280, 720), CV_8UC1);
         resize( mat_lines, mat_lines, Size(640, 360), 0, 0, CV_INTER_LINEAR );
@@ -493,8 +490,129 @@ float det(mat3x3_t matrix)
           +matrix.data[0][2]*(matrix.data[1][0]*matrix.data[2][1]-matrix.data[1][1]*matrix.data[2][0]);
 }
 
-float distPoint2Plane(point3f point, plane_t plane)
+double distPoint2Plane(point3f point, plane_t plane)
 {
     float dist = abs(plane.a*point.x+plane.b*point.y+plane.c*point.z+plane.d) / sqrt(plane.a*plane.a + plane.b*plane.b + plane.c*plane.c);
     return dist;
+}
+
+vector<point3f> computeRANSAC(vector<point3f> floorpoints)
+{
+    vector<point3f> result;
+    int max_iter = 10;
+    int iter=0;
+    int i0,i1,i2;
+    int N = floorpoints.size();
+    point3f p1,p2,p3;
+    plane_t plane;
+    ransac_t ransac;
+    ransac_t temp_ransac;
+    double dist_th = 5.;
+    int num_th = 0.8 * floorpoints.size();
+    
+    printf("floorpoints size = %d",floorpoints.size());
+    
+    srand(unsigned(time(0)));
+    
+    ransac.num = 0;
+    
+    while(iter<max_iter)
+    {
+        temp_ransac.point.clear();
+        temp_ransac.dist = 0;
+        temp_ransac.num = 0;
+        result.clear();
+        
+        i0 = rand()%N;
+        result.push_back(floorpoints[i0]);
+        do{
+            i1 = rand()%N;
+        }while(i1 == i0);
+        result.push_back(floorpoints[i1]);
+        do{
+            i2 = rand()%N;
+        }while(i1 == i0 || i2 == i1 || i2 == i0);
+        result.push_back(floorpoints[i2]);
+        
+        p1 = result[0];
+        p2 = result[1];
+        p3 = result[2];
+        
+        plane = computePlane(p1,p2,p3);
+        
+        int n=3;
+        
+        for(int j=0;j<N;j++)
+        {
+            if(j==i0 || j==i1 || j==i2)continue;
+            double dist = distPoint2Plane(floorpoints[j],plane);
+            if(dist <= dist_th)
+            {
+                result.push_back(floorpoints[j]);
+                temp_ransac.dist += dist;
+                temp_ransac.num += 1;
+            }
+        }
+        temp_ransac.point = result;
+        temp_ransac.plane = plane;
+        
+        if(temp_ransac.num > ransac.num)
+        {
+            ransac = temp_ransac;
+            printf("update ransac!!!!!\n");
+        }
+        
+        iter++;
+    }
+    
+    printf(" rasac_num = %d iter = %d\n",ransac.num,iter);
+    
+    double min_dist = dist_th * N;
+    int min_plane_num = 0;
+    int max_num = 0;
+    
+    Mat mat_point_cloud = Mat::zeros(1, ransac.point.size(), CV_32FC3);
+    Mat mat_point_cloud_raw = Mat::zeros(1, floorpoints.size(), CV_32FC3);
+    
+    #ifdef VIEW_POINTCLOUD 
+
+    int pc_cnt=0;
+        
+            for(vector<point3f>::const_iterator it = floorpoints.begin();it!=floorpoints.end();++it)
+            {                     
+                mat_point_cloud_raw.at<Vec3f>(0,pc_cnt)[0] = (*it).x;
+                mat_point_cloud_raw.at<Vec3f>(0,pc_cnt)[1] = (*it).y;
+                mat_point_cloud_raw.at<Vec3f>(0,pc_cnt)[2] = (*it).z;
+                pc_cnt++;
+            }
+    pc_cnt=0;
+    
+    for(vector<point3f>::const_iterator it = ransac.point.begin();it!=ransac.point.end();++it)
+            {                     
+                mat_point_cloud.at<Vec3f>(0,pc_cnt)[0] = (*it).x;
+                mat_point_cloud.at<Vec3f>(0,pc_cnt)[1] = (*it).y;
+                mat_point_cloud.at<Vec3f>(0,pc_cnt)[2] = (*it).z;
+                pc_cnt++;
+            }
+        
+        
+    #endif
+    
+    #ifdef VIEW_POINTCLOUD        
+       // WCloud cloud_widget = WCloud(mat_point_cloud, Color::green());
+       // cloud_widget.setRenderingProperty(POINT_SIZE, 1 );
+        
+        
+        WCloud cloud_widget1 = WCloud(mat_point_cloud_raw, Color::green());
+        myWindow.showWidget("Depth1", cloud_widget1);
+        WCloud cloud_widget2 = WCloud(mat_point_cloud, Color::blue());
+        myWindow2.showWidget("Depth2", cloud_widget2);
+        //WCloud cloud_widget3 = WCloud(mat_point_cloud[2], Color::red());
+        //myWindow.showWidget("Depth3", cloud_widget3);
+        
+        myWindow.spinOnce( 1, true );  
+        myWindow2.spinOnce( 1, true);
+    #endif
+    
+    return ransac.point;
 }
