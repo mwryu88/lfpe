@@ -24,10 +24,6 @@ int main(int argc, char * argv[])
         
         auto vertices = points.get_vertices();
         
-        
-        
-        vector<point3f> m_PointCloud;
-        
         // Query frame size (width and height)
         const int w = depth.as<rs2::video_frame>().get_width();
         const int h = depth.as<rs2::video_frame>().get_height();
@@ -58,23 +54,34 @@ int main(int argc, char * argv[])
                 m_tempPointCloud.y = -(float)(1000 * vertices[cnt].x);
                 m_tempPointCloud.z = -(float)(1000 * vertices[cnt].y);
                 
-                temp_pixel_point.x = (int)((m_cam_param.f *  vertices[cnt].x / vertices[cnt].z) + m_cam_param.cx);
-                temp_pixel_point.y = (int)((m_cam_param.f *  vertices[cnt].y / vertices[cnt].z) + m_cam_param.cy);
+//                m_tempPointCloud.x = (float)(vertices[cnt].x);               
+//                m_tempPointCloud.y = (float)(vertices[cnt].y);
+//                m_tempPointCloud.z = (float)(vertices[cnt].z);               
                 
-                if(temp_pixel_point.x>=0 && temp_pixel_point.x<w && temp_pixel_point.y>=0 && temp_pixel_point.y<h)
-                {
-                    mat_floor.at<uchar>(temp_pixel_point.y,temp_pixel_point.x) = image_ir_origin.at<uchar>(temp_pixel_point.y,temp_pixel_point.x);
-                    m_lineDepth[temp_pixel_point.x][temp_pixel_point.y] = m_tempDepthPointCloud;
+//                temp_pixel_point.x = (int)((m_cam_param.f *  vertices[cnt].x / vertices[cnt].z) + m_cam_param.cx);
+//                temp_pixel_point.y = (int)((m_cam_param.f *  vertices[cnt].y / vertices[cnt].z) + m_cam_param.cy);
+
+                    //mat_floor.at<uchar>(temp_pixel_point.y,temp_pixel_point.x) = image_ir_origin.at<uchar>(temp_pixel_point.y,temp_pixel_point.x);
+                    //m_lineDepth[temp_pixel_point.x][temp_pixel_point.y] = m_tempDepthPointCloud;
                     temp_floor_points.push_back(m_tempPointCloud);
-                }
-                             
-                m_PointCloud.push_back(m_tempPointCloud);
-                
-               
             }                               
         }
         
-        floor_points = computeRANSAC(temp_floor_points);
+        floor_points = computeRANSAC(temp_floor_points);       
+        
+        for(vector<point3f>::iterator it=floor_points.begin();it!=floor_points.end();++it)
+        {
+            
+            point2d temp_pixel_point; 
+            temp_pixel_point.x = (int)((m_cam_param.f *  -(*it).y / (*it).x) + m_cam_param.cx);
+            temp_pixel_point.y = (int)((m_cam_param.f *  -(*it).z / (*it).x) + m_cam_param.cy);
+            
+            if(temp_pixel_point.x>=0 && temp_pixel_point.x<w && temp_pixel_point.y>=0 && temp_pixel_point.y<h)
+            {
+                mat_floor.at<uchar>(temp_pixel_point.y,temp_pixel_point.x) = image_ir_origin.at<uchar>(temp_pixel_point.y,temp_pixel_point.x);
+                m_lineDepth[temp_pixel_point.x][temp_pixel_point.y] = (*it);
+            }
+        }
 
         //cv::imshow("floor_image",mat_floor);
         
@@ -144,16 +151,12 @@ int main(int argc, char * argv[])
         {
             point3d m_tempPointCloud;
             
-            m_tempPointCloud.x = (float)(300 * (*it).z);               
-            m_tempPointCloud.y = -(float)(300 * (*it).x);
-            m_tempPointCloud.z = -(float)(1000 * (*it).y);
-            
-            m_tempPointCloud.x = (int)m_tempPointCloud.x;
-            m_tempPointCloud.y = (int)(m_tempPointCloud.y + FLOORMAP_W * 0.5);
-            m_tempPointCloud.z = (int)m_tempPointCloud.z + 300;
+            m_tempPointCloud.x = (int)(0.3 * (*it).x);
+            m_tempPointCloud.y = (int)(0.3 * (*it).y + FLOORMAP_W * 0.5);
+            m_tempPointCloud.z = (int)((*it).z + 300);
             
             if(m_tempPointCloud.x >= 0 && m_tempPointCloud.x < FLOORMAP_H && m_tempPointCloud.y >= 0 && m_tempPointCloud.y < FLOORMAP_W && m_tempPointCloud.z >=0 && m_tempPointCloud.z < 255)
-                mat_floorMap.at<uchar>(m_tempPointCloud.x,m_tempPointCloud.y) = m_tempPointCloud.z;
+                mat_floorMap.at<uchar>(m_tempPointCloud.x,m_tempPointCloud.y) = 255;//m_tempPointCloud.z;
         }
         
         vector<point2d> cell_line_depths;
@@ -508,7 +511,7 @@ vector<point3f> computeRANSAC(vector<point3f> floorpoints)
     ransac_t ransac;
     ransac_t temp_ransac;
     double dist_th = 5.;
-    int num_th = 0.8 * floorpoints.size();
+    //int num_th = 0.8 * floorpoints.size();
     
     printf("floorpoints size = %d",floorpoints.size());
     
@@ -559,7 +562,6 @@ vector<point3f> computeRANSAC(vector<point3f> floorpoints)
         if(temp_ransac.num > ransac.num)
         {
             ransac = temp_ransac;
-            printf("update ransac!!!!!\n");
         }
         
         iter++;
